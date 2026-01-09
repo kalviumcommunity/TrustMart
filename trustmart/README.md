@@ -13,3 +13,5 @@ Before approving a PR, reviewers must ensure:
 - Naming conventions are followed
 - No security or sensitive data issues
 - Proper screenshots or evidence attached
+
+![alt text](image-2.png)
