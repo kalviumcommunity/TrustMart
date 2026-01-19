@@ -1,9 +1,0 @@
-services:
-  app:
-    build: .
-    container_name: nextjs_app
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env
-    restart: always
