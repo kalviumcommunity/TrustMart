@@ -3,6 +3,7 @@ import { ERROR_CODES } from "../../../lib/errorCodes";
 import { ZodError } from "zod";
 import { userSchema, userUpdateSchema } from "../../../lib/schemas/userSchema";
 import { NextRequest } from "next/server";
+import { cacheUtils, cacheKeys, cacheTTL } from "../../../lib/redis";
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,14 +12,45 @@ export async function GET(req: NextRequest) {
     const userEmail = req.headers.get("x-user-email");
     const userRole = req.headers.get("x-user-role");
     
-    // Simulate fetching users from database
+    // Check cache first
+    const cacheKey = cacheKeys.users.list;
+    const cachedData = await cacheUtils.get(cacheKey);
+    
+    if (cachedData) {
+      console.log("🎯 Cache Hit - Users served from Redis");
+      
+      // Apply role-based filtering to cached data
+      const filteredUsers = userRole === "admin" 
+        ? cachedData.users 
+        : cachedData.users.filter((user: any) => user.isActive);
+      
+      return sendSuccess({
+        users: filteredUsers,
+        requestedBy: {
+          id: userId,
+          email: userEmail,
+          role: userRole
+        },
+        totalUsers: cachedData.users.length,
+        activeUsers: cachedData.users.filter((u: any) => u.isActive).length,
+        cached: true,
+        cacheTimestamp: new Date().toISOString()
+      }, "Users fetched successfully (cached)");
+    }
+    
+    console.log("❄️ Cache Miss - Fetching users from database");
+    
+    // Simulate database fetch (in production, this would be a real database query)
     const users = [
       { id: 1, name: "Alice", email: "alice@example.com", age: 25, role: "user", isActive: true },
       { id: 2, name: "Bob", email: "bob@example.com", age: 30, role: "admin", isActive: true },
       { id: 3, name: "Charlie", email: "charlie@example.com", age: 28, role: "user", isActive: false }
     ];
     
-    // If user is not admin, only return active users
+    // Store in cache for 5 minutes
+    await cacheUtils.set(cacheKey, { users }, cacheTTL.MEDIUM);
+    
+    // Apply role-based filtering
     const filteredUsers = userRole === "admin" 
       ? users 
       : users.filter(user => user.isActive);
@@ -31,7 +63,9 @@ export async function GET(req: NextRequest) {
         role: userRole
       },
       totalUsers: users.length,
-      activeUsers: users.filter(u => u.isActive).length
+      activeUsers: users.filter(u => u.isActive).length,
+      cached: false,
+      cacheTimestamp: new Date().toISOString()
     }, "Users fetched successfully");
   } catch (err) {
     return sendError(
@@ -70,6 +104,10 @@ export async function POST(req: NextRequest) {
       createdAt: new Date().toISOString(),
       createdBy: requestingUserId
     };
+    
+    // Invalidate cache after creation
+    await cacheUtils.del(cacheKeys.users.list);
+    console.log("🗑️ Cache invalidated for users list after creation");
     
     return sendSuccess(newUser, "User created successfully", 201);
   } catch (err) {
@@ -138,6 +176,11 @@ export async function PUT(req: NextRequest) {
       updatedAt: new Date().toISOString(),
       updatedBy: requestingUserId
     };
+    
+    // Invalidate relevant caches
+    await cacheUtils.del(cacheKeys.users.list);
+    await cacheUtils.del(cacheKeys.users.byId(parseInt(userId)));
+    console.log("🗑️ Cache invalidated for users list and specific user after update");
     
     return sendSuccess(updatedUser, "User updated successfully");
   } catch (err) {
