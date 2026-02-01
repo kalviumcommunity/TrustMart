@@ -1015,3 +1015,261 @@ Cache operations are logged with emojis for easy identification:
 5. **Reliability**: Graceful degradation when database is slow
 
 This Redis caching system provides enterprise-grade performance optimization that scales with your application's growth while maintaining data consistency and reliability.
+
+---
+
+# Next.js App Router & Navigation System
+
+This project implements a comprehensive Next.js App Router system with public and protected routes, dynamic routing, and proper middleware-based authentication.
+
+## Understanding Routing in Next.js App Router
+
+The App Router in Next.js uses a file-based routing system. Each folder inside the `app/` directory represents a route.
+
+### Directory Structure
+
+```
+app/
+ ├── page.tsx               → Home (public)
+ ├── login/
+ │    └── page.tsx          → Login page (public)
+ ├── dashboard/
+ │    └── page.tsx          → Protected route
+ ├── users/
+ │    ├── page.tsx          → List users (protected)
+ │    └── [id]/
+ │         └── page.tsx     → Dynamic route for each user (protected)
+ ├── not-found.tsx          → Custom 404 page
+ └── layout.tsx             → Global layout wrapper
+```
+
+### Key Concepts
+
+- **`page.tsx`** → Defines a page route
+- **`[id]/page.tsx`** → Defines a dynamic route where `id` can be any value
+- **`layout.tsx`** → Wraps shared UI like navigation bars or footers
+- **`middleware.ts`** → Handles route protection and authentication
+
+## Route Protection Strategy
+
+### Public Routes
+- `/` - Home page
+- `/login` - Login page
+- `/signup` - Sign up page
+
+### Protected Routes
+- `/dashboard/*` - Dashboard and sub-routes
+- `/users/*` - User management pages
+
+### Middleware Implementation
+
+The middleware handles both API and page route protection:
+
+```typescript
+// API routes use Authorization header
+const token = req.headers.get("authorization")?.split(" ")[1];
+
+// Page routes use cookies
+const token = req.cookies.get("token")?.value;
+```
+
+## Public Pages
+
+### Home Page (`app/page.tsx`)
+```typescript
+export default function Home() {
+  return (
+    <main className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="text-center">
+        <h1 className="text-3xl font-bold text-gray-900">Welcome to TrustMart 🚀</h1>
+        <p className="mt-2 text-gray-600">Navigate to /login to sign in or /dashboard after login.</p>
+      </div>
+    </main>
+  );
+}
+```
+
+### Login Page (`app/login/page.tsx`)
+Features:
+- Real API integration with `/api/auth/login`
+- Cookie-based token storage
+- Demo account buttons for testing
+- Form validation and error handling
+- Loading states
+
+## Protected Pages
+
+### Dashboard (`app/dashboard/page.tsx`)
+Features:
+- JWT token validation
+- User information display
+- Statistics cards
+- Quick actions navigation
+- Logout functionality
+
+### Users List (`app/users/page.tsx`)
+Features:
+- Protected user listing
+- Role-based data filtering
+- User status badges
+- Profile navigation links
+- Breadcrumb navigation
+
+### Dynamic User Profiles (`app/users/[id]/page.tsx`)
+Features:
+- Dynamic routing based on user ID
+- Individual user profile display
+- Action buttons (Edit, Message, Deactivate)
+- Breadcrumb navigation
+- 404 handling for non-existent users
+
+## Dynamic Routing
+
+Dynamic routes let you load content based on parameters:
+
+### Example URLs
+- `/users/1` → User profile for user ID 1
+- `/users/2` → User profile for user ID 2
+- `/users/42` → User profile for user ID 42
+
+### Implementation
+```typescript
+interface Props {
+  params: { id: string };
+}
+
+export default async function UserProfile({ params }: Props) {
+  const { id } = params;
+  // Fetch user data based on ID
+  const user = await fetchUserById(id);
+  
+  return (
+    <main>
+      <h2>User Profile</h2>
+      <p>ID: {user.id}</p>
+      <p>Name: {user.name}</p>
+    </main>
+  );
+}
+```
+
+## Navigation & Layout
+
+### Global Navigation (`app/layout.tsx`)
+Features:
+- Responsive navigation bar
+- TrustMart branding
+- Quick access to all main routes
+- Hover effects and active states
+
+### Breadcrumbs
+Implemented in dynamic routes for better UX and SEO:
+```typescript
+<nav className="flex" aria-label="Breadcrumb">
+  <ol className="flex items-center space-x-4">
+    <li><a href="/">Home</a></li>
+    <li><a href="/users">Users</a></li>
+    <li><span>{user.name}</span></li>
+  </ol>
+</nav>
+```
+
+## Error Handling
+
+### Custom 404 Page (`app/not-found.tsx`)
+Features:
+- User-friendly error message
+- Helpful suggestions
+- Navigation options
+- Contact information
+
+### Authentication Errors
+- Automatic redirect to login for protected routes
+- Token validation and cleanup
+- Clear error messages
+
+## Authentication Flow
+
+### Login Process
+1. User enters credentials on `/login`
+2. Form validation and API call to `/api/auth/login`
+3. JWT token stored in cookies
+4. Redirect to `/dashboard`
+5. Middleware validates token on subsequent requests
+
+### Token Management
+- **Storage**: HTTP-only cookies for security
+- **Expiration**: 24 hours
+- **Validation**: Middleware checks on protected routes
+- **Cleanup**: Automatic removal on logout
+
+## Route Map
+
+| Route | Type | Access | Description |
+|-------|------|--------|-------------|
+| `/` | Public | All | Home page |
+| `/login` | Public | All | Login page |
+| `/signup` | Public | All | Sign up page |
+| `/dashboard` | Protected | Authenticated | Main dashboard |
+| `/users` | Protected | Authenticated | User list |
+| `/users/[id]` | Protected | Authenticated | User profile |
+| `/api/*` | Protected | Authenticated | API endpoints |
+
+## Testing the Routes
+
+### Demo Accounts
+| Email | Password | Role | Access |
+|-------|----------|------|--------|
+| admin@example.com | admin123 | Admin | Full access |
+| user@example.com | user123 | User | Standard access |
+| moderator@example.com | mod123 | Moderator | Limited admin access |
+
+### Test Scenarios
+
+1. **Public Access**: Visit `/` and `/login` without authentication
+2. **Protected Redirect**: Try accessing `/dashboard` without login
+3. **Dynamic Routes**: Visit `/users/1`, `/users/2`, etc.
+4. **404 Handling**: Visit `/non-existent-route`
+5. **Token Expiration**: Wait 24 hours or clear cookies
+
+## Benefits of This Implementation
+
+### 1. Scalability
+- File-based routing scales with application growth
+- Dynamic routes support unlimited user profiles
+- Easy to add new protected routes
+
+### 2. SEO Optimization
+- Semantic HTML structure
+- Breadcrumb navigation
+- Proper meta tags
+- Clean URLs
+
+### 3. User Experience
+- Intuitive navigation
+- Clear visual hierarchy
+- Helpful error pages
+- Smooth authentication flow
+
+### 4. Security
+- Middleware-based protection
+- JWT token validation
+- Cookie-based authentication
+- Automatic token cleanup
+
+### 5. Developer Experience
+- Clear file structure
+- Type-safe routing
+- Reusable components
+- Comprehensive error handling
+
+## Best Practices Implemented
+
+1. **Route Organization**: Logical grouping of related pages
+2. **Consistent Navigation**: Unified navigation across all pages
+3. **Error Handling**: Graceful degradation and helpful error messages
+4. **Authentication**: Secure token-based authentication
+5. **Responsive Design**: Mobile-friendly layouts
+6. **Accessibility**: Semantic HTML and ARIA labels
+
+This routing system provides a solid foundation for building scalable, secure, and user-friendly Next.js applications with proper authentication and navigation patterns.
