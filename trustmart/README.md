@@ -350,3 +350,297 @@ const validateUserForm = (formData: unknown) => {
 5. **Handle Gracefully**: Always catch and format validation errors properly
 
 Validation consistency ensures your API remains predictable, secure, and maintainable across the entire development team.
+
+---
+
+# Authorization Middleware & RBAC
+
+This project implements a comprehensive authorization middleware system with JWT validation and Role-Based Access Control (RBAC) to protect API routes based on user roles and sessions.
+
+## Authentication vs Authorization
+
+| Concept | Description | Example |
+|---------|-------------|---------|
+| **Authentication** | Confirms who the user is | User logs in with valid credentials |
+| **Authorization** | Determines what actions they can perform | Only admins can delete users |
+
+This lesson focuses on **authorization** - protecting routes according to role and session validity.
+
+## Architecture Overview
+
+```
+Request Flow:
+Client Request → Middleware (JWT Validation) → Route Handler (Role Checks) → Response
+                    ↓
+                Token Verification
+                Role Extraction
+                Permission Check
+                Header Injection
+```
+
+## User Roles & Permissions
+
+### Defined Roles
+- **admin**: Full system access, can manage all users and system settings
+- **moderator**: Can manage content and users, but not system administration
+- **user**: Standard user access, can manage own resources
+
+### Route Protection Matrix
+
+| Route | Admin | Moderator | User | Guest |
+|-------|-------|-----------|------|-------|
+| `/api/admin/*` | ✅ | ❌ | ❌ | ❌ |
+| `/api/users/*` | ✅ | ✅ | ✅ | ❌ |
+| `/api/tasks/*` | ✅ | ✅ | ✅ | ❌ |
+| `/api/auth/login` | ✅ | ✅ | ✅ | ✅ |
+
+## Middleware Implementation
+
+### Core Middleware (`app/middleware.ts`)
+
+The middleware intercepts all incoming requests and validates JWT tokens before routing:
+
+```typescript
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
+
+const protectedRoutes = {
+  "/api/admin": ["admin"],
+  "/api/users": ["user", "admin", "moderator"],
+  "/api/tasks": ["user", "admin", "moderator"],
+};
+
+export function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+  
+  // Route protection logic...
+  // JWT validation...
+  // Role-based access control...
+  // Header injection for downstream handlers...
+}
+```
+
+### Key Features
+
+1. **JWT Validation**: Verifies token authenticity and expiration
+2. **Role-Based Access**: Checks user permissions against route requirements
+3. **Header Injection**: Attaches user info to request for downstream handlers
+4. **Granular Error Handling**: Specific error codes for different failure scenarios
+
+## Authentication Flow
+
+### 1. User Login
+
+```bash
+curl -X POST http://localhost:3000/api/auth/login \
+-H "Content-Type: application/json" \
+-d '{
+  "email": "admin@example.com",
+  "password": "admin123"
+}'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "data": {
+    "user": {
+      "id": 1,
+      "name": "Admin User",
+      "email": "admin@example.com",
+      "role": "admin",
+      "isActive": true
+    },
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expiresIn": "24h"
+  },
+  "timestamp": "2025-10-30T10:00:00Z"
+}
+```
+
+### 2. Protected Route Access
+
+#### Admin Access (Success)
+```bash
+curl -X GET http://localhost:3000/api/admin \
+-H "Authorization: Bearer <ADMIN_JWT>"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Admin dashboard data retrieved successfully",
+  "data": {
+    "message": "Welcome Admin! You have full access.",
+    "user": {
+      "id": "1",
+      "name": "Admin User",
+      "email": "admin@example.com",
+      "role": "admin"
+    },
+    "systemStats": {
+      "totalUsers": 1250,
+      "activeUsers": 890,
+      "totalTasks": 3420,
+      "completedTasks": 2890,
+      "systemUptime": "99.9%"
+    },
+    "permissions": [
+      "read_all_users",
+      "write_all_users",
+      "delete_all_users",
+      "system_administration"
+    ]
+  }
+}
+```
+
+#### Regular User Access (Denied)
+```bash
+curl -X GET http://localhost:3000/api/admin \
+-H "Authorization: Bearer <USER_JWT>"
+```
+
+**Response:**
+```json
+{
+  "success": false,
+  "message": "Access denied: insufficient permissions",
+  "error": {
+    "code": "INSUFFICIENT_PERMISSIONS",
+    "details": "Required roles: admin, User role: user"
+  },
+  "timestamp": "2025-10-30T10:00:00Z"
+}
+```
+
+## Error Handling Scenarios
+
+### Token Missing
+```json
+{
+  "success": false,
+  "message": "Authorization token missing",
+  "error": { "code": "TOKEN_MISSING" }
+}
+```
+
+### Token Expired
+```json
+{
+  "success": false,
+  "message": "Token has expired",
+  "error": { "code": "TOKEN_EXPIRED" }
+}
+```
+
+### Invalid Token
+```json
+{
+  "success": false,
+  "message": "Invalid token format",
+  "error": { "code": "TOKEN_MALFORMED" }
+}
+```
+
+## Route-Specific Authorization
+
+### Users API (`/api/users`)
+
+**Role-Based Data Filtering:**
+- Admins see all users (active and inactive)
+- Regular users only see active users
+- Users can only update their own profiles
+- Only admins can change user roles
+
+**Example: User attempting to update another user's profile**
+```json
+{
+  "success": false,
+  "message": "You can only update your own profile",
+  "error": { "code": "FORBIDDEN" }
+}
+```
+
+### Admin API (`/api/admin`)
+
+**Admin-Only Operations:**
+- System statistics and monitoring
+- User management across all roles
+- System announcements
+- Administrative functions
+
+## Security Features
+
+### 1. Least Privilege Principle
+Users only have access to the minimum permissions necessary to perform their job functions.
+
+### 2. Token-Based Security
+- JWT tokens with expiration (24 hours)
+- Secure token generation and validation
+- Token-based user context injection
+
+### 3. Role Extensibility
+Easy to add new roles by updating the middleware configuration:
+
+```typescript
+const protectedRoutes = {
+  "/api/admin": ["admin"],
+  "/api/users": ["user", "admin", "moderator"],
+  "/api/tasks": ["user", "admin", "moderator"],
+  "/api/reports": ["admin", "moderator"], // New role support
+};
+```
+
+## Testing Authorization
+
+### Test Users Available
+
+| Email | Password | Role |
+|-------|----------|------|
+| admin@example.com | admin123 | admin |
+| user@example.com | user123 | user |
+| moderator@example.com | mod123 | moderator |
+
+### Testing Scenarios
+
+1. **Admin Access Test**: Verify admin can access all routes
+2. **User Access Test**: Verify user can access user routes but not admin routes
+3. **Token Expiration Test**: Verify expired tokens are rejected
+4. **Role Modification Test**: Verify only admins can change roles
+5. **Self-Update Test**: Verify users can only update their own profiles
+
+## Best Practices
+
+### 1. Security
+- Use environment variables for JWT secrets
+- Implement token refresh mechanisms in production
+- Log authorization attempts for security monitoring
+- Use HTTPS in production environments
+
+### 2. Performance
+- Cache user roles to reduce database queries
+- Optimize middleware for high-traffic scenarios
+- Consider token blacklisting for immediate revocation
+
+### 3. Maintainability
+- Keep role definitions centralized
+- Document permission matrices clearly
+- Use descriptive error codes for debugging
+- Implement comprehensive logging
+
+## Implementation Benefits
+
+1. **Centralized Security**: All authorization logic in one place
+2. **Consistent Enforcement**: Uniform security across all routes
+3. **Easy Maintenance**: Simple to add new roles and permissions
+4. **Developer Friendly**: Clear error messages and documentation
+5. **Production Ready**: Enterprise-grade security patterns
+
+This authorization system provides a robust foundation for secure, role-based access control that scales with your application's growth and complexity.
