@@ -1,13 +1,36 @@
 import { sendSuccess, sendError } from "../../../lib/responseHandler";
 import { ERROR_CODES } from "../../../lib/errorCodes";
+import { ZodError } from "zod";
+import { taskSchema, taskUpdateSchema } from "../../../lib/schemas/taskSchema";
 
 export async function GET() {
   try {
     // Simulate fetching tasks from database
     const tasks = [
-      { id: 1, title: "Complete project documentation", status: "pending", priority: "high" },
-      { id: 2, title: "Review pull requests", status: "in-progress", priority: "medium" },
-      { id: 3, title: "Update dependencies", status: "completed", priority: "low" }
+      { 
+        id: 1, 
+        title: "Complete project documentation", 
+        description: "Write comprehensive documentation for the API",
+        status: "pending", 
+        priority: "high",
+        dueDate: "2025-11-15T00:00:00Z",
+        assignedTo: "alice@example.com"
+      },
+      { 
+        id: 2, 
+        title: "Review pull requests", 
+        description: "Review and merge pending PRs",
+        status: "in-progress", 
+        priority: "medium",
+        assignedTo: "bob@example.com"
+      },
+      { 
+        id: 3, 
+        title: "Update dependencies", 
+        description: "Update npm packages to latest versions",
+        status: "completed", 
+        priority: "low"
+      }
     ];
     
     return sendSuccess(tasks, "Tasks fetched successfully");
@@ -23,36 +46,29 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const data = await req.json();
+    const body = await req.json();
     
-    // Validation
-    if (!data.title) {
-      return sendError(
-        "Missing required field: title", 
-        ERROR_CODES.VALIDATION_ERROR, 
-        400
-      );
-    }
-    
-    if (!data.status || !['pending', 'in-progress', 'completed'].includes(data.status)) {
-      return sendError(
-        "Invalid status. Must be: pending, in-progress, or completed", 
-        ERROR_CODES.VALIDATION_ERROR, 
-        400
-      );
-    }
+    // Validate input using Zod schema
+    const validatedData = taskSchema.parse(body);
     
     // Simulate creating a task
     const newTask = {
       id: Date.now(),
-      title: data.title,
-      status: data.status,
-      priority: data.priority || 'medium',
+      ...validatedData,
       createdAt: new Date().toISOString()
     };
     
     return sendSuccess(newTask, "Task created successfully", 201);
   } catch (err) {
+    if (err instanceof ZodError) {
+      return sendError(
+        "Validation failed", 
+        ERROR_CODES.VALIDATION_ERROR, 
+        400, 
+        err.issues.map((e: any) => ({ field: e.path.join('.'), message: e.message }))
+      );
+    }
+    
     return sendError(
       "Failed to create task", 
       ERROR_CODES.TASK_CREATION_FAILED, 
@@ -75,17 +91,29 @@ export async function PUT(req: Request) {
       );
     }
     
-    const data = await req.json();
+    const body = await req.json();
+    
+    // Validate input using Zod schema
+    const validatedData = taskUpdateSchema.parse(body);
     
     // Simulate updating a task
     const updatedTask = {
       id: parseInt(taskId),
-      ...data,
+      ...validatedData,
       updatedAt: new Date().toISOString()
     };
     
     return sendSuccess(updatedTask, "Task updated successfully");
   } catch (err) {
+    if (err instanceof ZodError) {
+      return sendError(
+        "Validation failed", 
+        ERROR_CODES.VALIDATION_ERROR, 
+        400, 
+        err.issues.map((e: any) => ({ field: e.path.join('.'), message: e.message }))
+      );
+    }
+    
     return sendError(
       "Failed to update task", 
       ERROR_CODES.TASK_UPDATE_FAILED, 
