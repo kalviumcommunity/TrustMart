@@ -11,16 +11,15 @@ const protectedApiRoutes = {
   "/api/tasks": ["user", "admin", "moderator"],
 };
 
-// Define protected page routes
+// Define protected page routes (business authentication)
 const protectedPageRoutes = [
-  "/dashboard",
-  "/users"
+  "/dashboard"
 ];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Handle API route protection
+  // Handle API route protection (legacy JWT-based)
   const protectedApiRoute = Object.keys(protectedApiRoutes).find(route => 
     pathname.startsWith(route)
   );
@@ -29,7 +28,7 @@ export function middleware(req: NextRequest) {
     return handleApiRouteProtection(req, pathname, protectedApiRoute);
   }
 
-  // Handle page route protection
+  // Handle page route protection (business authentication)
   const protectedPageRoute = protectedPageRoutes.find(route => 
     pathname.startsWith(route)
   );
@@ -117,30 +116,37 @@ function handleApiRouteProtection(req: NextRequest, pathname: string, protectedR
 }
 
 function handlePageRouteProtection(req: NextRequest, pathname: string) {
-  // Extract token from cookies for page routes
-  const token = req.cookies.get("token")?.value;
-
-  if (!token) {
+  // For business authentication, check localStorage-based session
+  // Since we can't access localStorage in middleware, we'll check for a business session cookie
+  
+  const businessSession = req.cookies.get("business_session")?.value;
+  
+  if (!businessSession) {
     // Redirect to login page
     const loginUrl = new URL("/login", req.url);
     return NextResponse.redirect(loginUrl);
   }
 
   try {
-    // Verify JWT token
-    jwt.verify(token, JWT_SECRET);
+    // Verify business session (simple validation)
+    const businessData = JSON.parse(decodeURIComponent(businessSession));
     
-    // Token is valid, allow access
+    if (!businessData.id || !businessData.email) {
+      // Invalid session, redirect to login
+      const loginUrl = new URL("/login", req.url);
+      const response = NextResponse.redirect(loginUrl);
+      response.cookies.delete("business_session");
+      return response;
+    }
+
+    // Valid session, allow access
     return NextResponse.next();
 
   } catch (error) {
-    // Token is invalid or expired, redirect to login
+    // Invalid session format, redirect to login
     const loginUrl = new URL("/login", req.url);
-    
-    // Clear the invalid token
     const response = NextResponse.redirect(loginUrl);
-    response.cookies.delete("token");
-    
+    response.cookies.delete("business_session");
     return response;
   }
 }
@@ -153,6 +159,6 @@ export const config = {
     "/api/tasks/:path*",
     "/api/auth/profile",
     "/dashboard/:path*",
-    "/users/:path*"
+    "/((?!api|_next|favicon.ico|rate|business).*)"
   ]
 };
